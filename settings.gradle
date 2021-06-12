@@ -1,0 +1,2 @@
+rootProject.name = "ExoPlayerPlayGround"
+include ':app'
