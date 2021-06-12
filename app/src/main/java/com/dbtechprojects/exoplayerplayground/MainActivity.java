@@ -118,6 +118,8 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
                 progressBar.setVisibility(View.VISIBLE);
             }
             case Player.STATE_READY: {
+                // hide progress bar
+                progressBar.setVisibility(View.INVISIBLE);
                 Log.d(TAG, "onPlaybackStateChanged: ready");
             }
         }
@@ -131,11 +133,7 @@ public class MainActivity extends AppCompatActivity implements Player.Listener {
         }
     }
 
-    @Override
-    public void onIsPlayingChanged(boolean isPlaying) {
-        // hide progress bar
-        progressBar.setVisibility(View.INVISIBLE);
-    }
+
 
     // save details if Activity is destroyed
     @Override
