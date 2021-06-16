@@ -1,102 +1,160 @@
 package com.dbtechprojects.exoplayerplayground;
 
-import androidx.annotation.Nullable;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentManager;
 
-import android.Manifest;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.PersistableBundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
+import com.google.android.exoplayer2.MediaItem;
+import com.google.android.exoplayer2.MediaMetadata;
+import com.google.android.exoplayer2.Player;
+import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.source.dash.PlayerEmsgHandler;
+import com.google.android.exoplayer2.ui.PlayerControlView;
+import com.google.android.exoplayer2.ui.PlayerView;
+import com.google.android.exoplayer2.util.Util;
+import com.google.common.collect.ImmutableList;
 
-public class MainActivity extends AppCompatActivity {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
-    private static final int REQUEST_ENABLE_BT = 1;
-    private static BluetoothAdapter bluetoothAdapter;
-
+public class MainActivity extends AppCompatActivity implements Player.Listener {
+    private static final String TAG = "MainActivity";
+    SimpleExoPlayer player;
+    PlayerView playerView;
+    ProgressBar progressBar;
+    TextView titleTv;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        progressBar = findViewById(R.id.progressBar);
+        titleTv = findViewById(R.id.title);
 
-        checkBluetoothPerms();
-        setupBluetooth();
-        navigateToPlayer();
-        bluetoothAdapter.startDiscovery();
 
-    }
+        setupPlayer();
+        addMP3();
+        addMP4Files();
 
-    // check Bluetooth permissions
-    private void checkBluetoothPerms() {
-        int MY_PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION = 1;
-        ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
-                MY_PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION);
-    }
 
-    private void setupBluetooth(){
-        // setup Bluetooth
-        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        Log.d(TAG, "onCreate: savedInstance" + savedInstanceState);
+        // restore playstate on Rotation
+        if (savedInstanceState != null) {
+            if (savedInstanceState.getInt("mediaItem") != 0) {
+                int restoredMediaItem = savedInstanceState.getInt("mediaItem");
+                Long seekTime  = savedInstanceState.getLong("SeekTime");
+                player.seekTo(restoredMediaItem, seekTime);
+                player.play();
+            }
 
-        // enable Bluetooth if not already enabled
-        if (!bluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
+    }
 
-        // Register for broadcasts when a device is discovered.
-        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
-        registerReceiver(mReceiver, filter);
+    private void addMP4Files() {
+        MediaItem mediaItem = MediaItem.fromUri(getString(R.string.media_url_mp4));
+        MediaItem mediaItem2 = MediaItem.fromUri(getString(R.string.myTestMp4));
+
+
+        List<MediaItem> newItems = ImmutableList.of(
+                mediaItem,
+                mediaItem2);
+
+        player.addMediaItems(newItems);
+        player.prepare();
+    }
+
+    private void setupPlayer() {
+        player = new SimpleExoPlayer.Builder(this).build();
+        playerView = findViewById(R.id.video_view);
+        playerView.setPlayer(player);
+        player.addListener(this);
+    }
+
+    private void addMP3() {
+        // Build the media item.
+
+        MediaItem mediaItem = MediaItem.fromUri(getString(R.string.test_mp3));
+        player.setMediaItem(mediaItem);
+        // Set the media item to be played.
+        player.setMediaItem(mediaItem);
+        // Prepare the player.
+        player.prepare();
+
+    }
+
+    // release resources
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (Util.SDK_INT < 24) {
+            player.release();
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (Util.SDK_INT >= 24) {
+            player.release();
+        }
     }
 
 
-    // Create a BroadcastReceiver for bluetooth actions
-    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            Log.i("Bluetooth", "got action " + action);
-            if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                // Discovery has found a device. Get the BluetoothDevice
-                // object and its info from the Intent.
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                String deviceName = device.getName();
-                String deviceHardwareAddress = device.getAddress(); // MAC address
-                Log.i("Bluetooth", "got device " + deviceName );
+    // handle loading
+    @Override
+    public void onPlaybackStateChanged(int state) {
+        switch (state) {
+            case Player.STATE_BUFFERING: {
+                Log.d(TAG, "onPlaybackStateChanged: buffering");
+                // show progrees bar
+                progressBar.setVisibility(View.VISIBLE);
+            }
+            case Player.STATE_READY: {
+                // hide progress bar
+                progressBar.setVisibility(View.INVISIBLE);
+                Log.d(TAG, "onPlaybackStateChanged: ready");
             }
         }
-    };
-
-    private void navigateToPlayer() {
-        Fragment mFragment;
-        mFragment = new PlayerFragment();
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        fragmentManager.beginTransaction()
-                .replace(R.id.container, mFragment).commit();
-
     }
-
+    //get Title from metadata
     @Override
-    public void onActivityResult(int requestCode, int resultCode, @Nullable @org.jetbrains.annotations.Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if(requestCode == REQUEST_ENABLE_BT && resultCode == -1){
-            Log.d("ScanFragment", "onActivityResult: success ");
+    public void onMediaMetadataChanged(MediaMetadata mediaMetadata) {
+        if (mediaMetadata.title != null) {
+            titleTv.setText(mediaMetadata.title.toString());
+
         }
+    }
+
+
+
+    // save details if Activity is destroyed
+    @Override
+    protected void onSaveInstanceState(@NonNull @org.jetbrains.annotations.NotNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+
+        Log.d(TAG, "onSaveInstanceState: " + player.getCurrentPosition());
+        // current play position
+        outState.putLong("SeekTime", player.getCurrentPosition());
+        // current mediaItem
+        outState.putInt("mediaItem", player.getCurrentWindowIndex());
+
 
     }
+
+
+
 
     @Override
-    public void onDestroy() {
+    protected void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(mReceiver);
+        Log.d(TAG, "onSaveInstanceState: " + player.getCurrentPosition());
     }
-
 }
